@@ -1,52 +1,51 @@
 package ru.practicum.shareit.request;
 
-import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 import ru.practicum.shareit.request.dto.ItemRequestDto;
-import ru.practicum.shareit.request.dto.ItemRequestRequestDto;
+import ru.practicum.shareit.request.dto.ItemRequestDtoOut;
+import ru.practicum.shareit.request.service.ItemRequestService;
 
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
 import java.util.List;
 
-@RequiredArgsConstructor
+import static ru.practicum.shareit.item.ItemController.USER_HEADER;
+
+
 @RestController
 @RequestMapping(path = "/requests")
+@RequiredArgsConstructor
+@Slf4j
+@Validated
 public class ItemRequestController {
-    private final ItemRequestService itemRequestService;
+
+    private final ItemRequestService requestService;
 
     @PostMapping
-    public ItemRequestDto create(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                 @RequestBody ItemRequestRequestDto itemRequestRequestDto) {
-        itemRequestRequestDto.setRequestorId(userId);
-        return itemRequestService.create(itemRequestRequestDto);
+    public ItemRequestDtoOut add(@RequestHeader(USER_HEADER) Long userId,
+                                 @Valid @RequestBody ItemRequestDto requestDto) {
+        return requestService.add(userId, requestDto);
     }
 
     @GetMapping
-    public List<ItemRequestDto> findAll(@RequestHeader("X-Sharer-User-Id") Long userId) {
-        return itemRequestService.findAllByUserId(userId);
-    }
-
-    @GetMapping("/{requestId}")
-    public ItemRequestDto findItemRequestById(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                              @PathVariable Long requestId) {
-        return itemRequestService.findItemRequestById(requestId);
+    public List<ItemRequestDtoOut> getUserRequests(@RequestHeader(USER_HEADER) Long userId) {
+        return requestService.getUserRequests(userId);
     }
 
     @GetMapping("/all")
-    public List<ItemRequestDto> findAllUsersItemRequest(
-            @RequestParam(defaultValue = "0", required = false) @Min(0) int from,
-            @RequestParam(defaultValue = "10", required = false) @Min(1) int size) {
-        Pageable pageable = PageRequest.of(from, size, Sort.by("created").descending());
-        return itemRequestService.findAllUsersItemRequest(pageable);
+    public List<ItemRequestDtoOut> getAllRequests(@RequestHeader(USER_HEADER) Long userId,
+                                                  @RequestParam(name = "from", defaultValue = "0") @Min(0) Integer from,
+                                                  @RequestParam(value = "size", defaultValue = "10") @Min(1) Integer size) {
+        return requestService.getAllRequests(userId, from, size);
+    }
+
+    @GetMapping("/{requestId}")
+    public ItemRequestDtoOut get(@RequestHeader(USER_HEADER) Long userId,
+                                 @PathVariable Long requestId) {
+        return requestService.getRequestById(userId, requestId);
     }
 }
+

@@ -1,126 +1,122 @@
 package ru.practicum.shareit.request;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import ru.practicum.shareit.request.dto.ItemRequestDto;
-import ru.practicum.shareit.request.dto.ItemRequestRequestDto;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import ru.practicum.shareit.request.dto.ItemRequestDtoOut;
+import ru.practicum.shareit.request.service.ItemRequestService;
+import ru.practicum.shareit.user.User;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.List;
 
-import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static ru.practicum.shareit.item.ItemController.USER_HEADER;
 
-@WebMvcTest(ItemRequestController.class)
-@AutoConfigureMockMvc
+@WebMvcTest(controllers = ItemRequestController.class)
 class ItemRequestControllerTest {
 
-    @MockBean
-    private ItemRequestService itemRequestService;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper mapper;
+    @MockBean
+    private ItemRequestService requestService;
 
-    public ItemRequestDto getItemRequestDto() {
-        return ItemRequestDto.builder()
-                .id(1L)
-                .description("TestItemRequestDescription")
-                .requestor(null)
-                .created(LocalDateTime.now())
-                .items(List.of())
-                .build();
+    private final User user = User.builder()
+            .id(1L)
+            .name("username")
+            .email("email@email.com")
+            .build();
+
+    private final ItemRequestDtoOut requestDto = ItemRequestDtoOut.builder()
+            .id(1L)
+            .description("description")
+            .created(LocalDateTime.now())
+            .items(List.of())
+            .build();
+
+    @Test
+    @SneakyThrows
+    void createRequest() {
+        when(requestService.add(any(), any())).thenReturn(requestDto);
+
+        String result = mockMvc.perform(MockMvcRequestBuilders.post("/requests")
+                        .content(objectMapper.writeValueAsString(requestDto))
+                        .characterEncoding(StandardCharsets.UTF_8)
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(requestDto), result);
     }
 
     @Test
-    void create() throws Exception {
-        // given
-        ItemRequestDto itemRequestDto = getItemRequestDto();
-        ItemRequestRequestDto itemRequestRequestDto = new ItemRequestRequestDto(1L, "TestItemRequestRequestDescription");
-        when(itemRequestService.create(any())).thenReturn(itemRequestDto);
+    @SneakyThrows
+    void getUserRequests() {
+        when(requestService.getUserRequests(user.getId())).thenReturn(List.of(requestDto));
 
-        // when + then
-        mockMvc.perform(post("/requests")
-                        .header("X-Sharer-User-Id", 1L)
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/requests")
                         .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(itemRequestRequestDto)))
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemRequestDto.getId()), Long.class))
-                .andExpect(jsonPath("$.description", is(itemRequestDto.getDescription())))
-                .andExpect(jsonPath("$.created", is(itemRequestDto.getCreated().format(DateTimeFormatter.ISO_DATE_TIME))));
-        verify(itemRequestService, times(1)).create(any());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(List.of(requestDto)), result);
     }
 
     @Test
-    void findAll() throws Exception {
-        // given
-        when(itemRequestService.findAllByUserId(anyLong())).thenReturn(Collections.emptyList());
+    @SneakyThrows
+    void getAllRequests() {
+        Integer from = 0;
+        Integer size = 10;
+        when(requestService.getAllRequests(user.getId(), from, size)).thenReturn(List.of(requestDto));
 
-        // when + then
-        mockMvc.perform(get("/requests")
-                        .header("X-Sharer-User-Id", 1L)
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/requests/all")
                         .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
-        verify(itemRequestService, times(1)).findAllByUserId(anyLong());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(List.of(requestDto)), result);
     }
 
     @Test
-    void findItemRequestById() throws Exception {
-        // given
-        ItemRequestDto itemRequestDto = getItemRequestDto();
-        when(itemRequestService.findItemRequestById(anyLong())).thenReturn(itemRequestDto);
+    @SneakyThrows
+    void get() {
+        Long requestId = 1L;
 
-        // when + then
-        mockMvc.perform(get("/requests/1")
-                        .header("X-Sharer-User-Id", 1L)
+        when(requestService.getRequestById(user.getId(), requestId)).thenReturn(requestDto);
+
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/requests/{requestId}", requestId)
                         .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemRequestDto.getId()), Long.class))
-                .andExpect(jsonPath("$.description", is(itemRequestDto.getDescription())))
-                .andExpect(jsonPath("$.created", is(itemRequestDto.getCreated().format(DateTimeFormatter.ISO_DATE_TIME))));
-        verify(itemRequestService, times(1)).findItemRequestById(anyLong());
-    }
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
 
-    @Test
-    void findAllUsersItemRequest() throws Exception {
-        // given
-        when(itemRequestService.findAllUsersItemRequest(any())).thenReturn(Collections.emptyList());
-
-        // when + then
-        mockMvc.perform(get("/requests/all?from=0&size=10")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
-        verify(itemRequestService, times(1)).findAllUsersItemRequest(any());
+        assertEquals(objectMapper.writeValueAsString(requestDto), result);
     }
 }

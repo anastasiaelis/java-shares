@@ -1,48 +1,48 @@
 package ru.practicum.shareit.request;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Positive;
-import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import ru.practicum.shareit.request.dto.ItemRequestRequestDto;
+import org.springframework.stereotype.Controller;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+import ru.practicum.shareit.request.dto.ItemRequestDto;
 
-@RequiredArgsConstructor
-@RestController
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
+
+import static ru.practicum.shareit.Constants.USER_HEADER;
+
+@Controller
 @RequestMapping(path = "/requests")
+@RequiredArgsConstructor
+@Slf4j
+@Validated
 public class ItemRequestController {
-    private final ItemRequestClient itemRequestClient;
+
+    private final RequestClient requestClient;
 
     @PostMapping
-    public ResponseEntity<Object> create(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                         @Valid @RequestBody ItemRequestRequestDto itemRequestRequestDto) {
-        return itemRequestClient.create(userId, itemRequestRequestDto);
+    public ResponseEntity<Object> add(@RequestHeader(USER_HEADER) Long userId,
+                                      @Valid @RequestBody ItemRequestDto requestDto) {
+        return requestClient.addNewRequest(userId, requestDto);
     }
 
     @GetMapping
-    public ResponseEntity<Object> findAll(@RequestHeader("X-Sharer-User-Id") Long userId) {
-        return itemRequestClient.findAll(userId);
-    }
-
-    @GetMapping("/{requestId}")
-    public ResponseEntity<Object> findItemRequestById(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                                      @PathVariable Long requestId) {
-        return itemRequestClient.findItemRequestById(userId, requestId);
+    public ResponseEntity<Object> getUserRequests(@RequestHeader(USER_HEADER) Long userId) {
+        return requestClient.getUserRequests(userId);
     }
 
     @GetMapping("/all")
-    public ResponseEntity<Object> findAllUsersItemRequest(
-            @RequestHeader("X-Sharer-User-Id") Long userId,
-            @PositiveOrZero @RequestParam(defaultValue = "0", required = false) int from,
-            @Positive @RequestParam(defaultValue = "10", required = false) int size) {
-        return itemRequestClient.findAllUsersItemRequest(userId, from, size);
+    public ResponseEntity<Object> getAllRequests(@RequestHeader(USER_HEADER) Long userId,
+                                                 @RequestParam(name = "from", defaultValue = "0") @Min(0) Integer from,
+                                                 @RequestParam(value = "size", defaultValue = "10") @Min(1) Integer size) {
+        return requestClient.getAllRequests(userId, from, size);
+    }
+
+    @GetMapping("/{requestId}")
+    public ResponseEntity<Object> get(@RequestHeader(USER_HEADER) Long userId,
+                                      @PathVariable Long requestId) {
+        return requestClient.getRequestById(userId, requestId);
     }
 }

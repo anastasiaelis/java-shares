@@ -1,64 +1,74 @@
 package ru.practicum.shareit.item;
 
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-import ru.practicum.shareit.comment.dto.CommentDto;
-import ru.practicum.shareit.comment.dto.CommentRequestDto;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+import ru.practicum.shareit.item.dto.CommentDto;
+import ru.practicum.shareit.item.dto.CommentDtoOut;
 import ru.practicum.shareit.item.dto.ItemDto;
-import ru.practicum.shareit.item.dto.ItemInfoDto;
+import ru.practicum.shareit.item.dto.ItemDtoOut;
+import ru.practicum.shareit.item.service.ItemService;
 
-import java.util.Collection;
+import javax.validation.Valid;
+import javax.validation.constraints.Min;
+import java.util.List;
 
-@RequiredArgsConstructor
+@Slf4j
 @RestController
 @RequestMapping("/items")
+@Validated
+@AllArgsConstructor
 public class ItemController {
-    private final ItemService itemService;
-
-    @GetMapping
-    public Collection<ItemInfoDto> findAll(@RequestHeader("X-Sharer-User-Id") Long userId) {
-        return itemService.findItemsByUserId(userId);
-    }
-
-    @GetMapping("/{itemId}")
-    public ItemInfoDto getItemDto(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                  @PathVariable Long itemId) {
-        return itemService.findItemById(userId, itemId);
-    }
+    public static final String USER_HEADER = "X-Sharer-User-Id";
+    private ItemService itemService;
 
     @PostMapping
-    public ItemDto create(@RequestHeader("X-Sharer-User-Id") Long userId,
+    public ItemDtoOut add(@RequestHeader(USER_HEADER) Long userId,
                           @Valid @RequestBody ItemDto itemDto) {
-        return itemService.create(userId, itemDto);
+        log.info("POST Запрос на добавление пользователем с id = {} предмета {}", userId, itemDto.toString());
+        return itemService.add(userId, itemDto);
     }
 
     @PatchMapping("/{itemId}")
-    public ItemDto update(@RequestHeader("X-Sharer-User-Id") Long userId,
-                          @PathVariable Long itemId,
-                          @RequestBody ItemDto itemDto) {
+    public ItemDtoOut update(@RequestHeader(USER_HEADER) Long userId,
+                             @RequestBody ItemDto itemDto,
+                             @PathVariable Long itemId) {
+        log.info("PATCH Запрос на обновление предмета с id = {} пользователем с id = {} ", itemId, userId);
         return itemService.update(userId, itemId, itemDto);
     }
 
-    @PostMapping("/{itemId}/comment")
-    public CommentDto addComment(@RequestHeader("X-Sharer-User-Id") Long userId,
-                                 @PathVariable Long itemId,
-                                 @RequestBody CommentRequestDto commentRequestDto) {
-        return itemService.addComment(userId, itemId, commentRequestDto);
+    @GetMapping("/{itemId}")
+    public ItemDtoOut findById(@RequestHeader(USER_HEADER) Long userId,
+                               @PathVariable("itemId")
+                               Long itemId) {
+        log.info("GET Запрос на получение предмета с id = {} пользователем с id = {} ", itemId, userId);
+        return itemService.findItemById(userId, itemId);
+    }
+
+    @GetMapping
+    public List<ItemDtoOut> findAll(@RequestHeader(USER_HEADER) Long userId,
+                                    @RequestParam(value = "from", defaultValue = "0") @Min(0) Integer from,
+                                    @RequestParam(value = "size", defaultValue = "10") @Min(1) Integer size
+    ) {
+        log.info("GET Запрос на получение предметов пользователя с id = {}", userId);
+        return itemService.findAll(userId, from, size);
     }
 
     @GetMapping("/search")
-    public Collection<ItemDto> searchItemDto(
-            @RequestHeader("X-Sharer-User-Id") Long userId,
-            @RequestParam(defaultValue = "", required = false) String text) {
-        return itemService.findItemsByText(text);
+    public List<ItemDtoOut> searchItems(@RequestHeader(USER_HEADER) Long userId,
+                                        @RequestParam(name = "text") String text,
+                                        @RequestParam(value = "from", defaultValue = "0") @Min(0) Integer from,
+                                        @RequestParam(value = "size", defaultValue = "10") @Min(1) Integer size) {
+        log.info("GET Запрос на поиск предметов c текстом = {}", text);
+        return itemService.search(userId, text, from, size);
+    }
+
+    @PostMapping("/{itemId}/comment")
+    public CommentDtoOut createComment(@RequestHeader(USER_HEADER) Long userId,
+                                       @Validated @RequestBody CommentDto commentDto,
+                                       @PathVariable Long itemId) {
+        log.info("POST Запрос на создание комментария id = {}", itemId);
+        return itemService.createComment(userId, commentDto, itemId);
     }
 }

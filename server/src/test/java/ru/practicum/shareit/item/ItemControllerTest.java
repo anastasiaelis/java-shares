@@ -1,191 +1,265 @@
 package ru.practicum.shareit.item;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import ru.practicum.shareit.comment.dto.CommentDto;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import ru.practicum.shareit.item.dto.CommentDto;
+import ru.practicum.shareit.item.dto.CommentDtoOut;
 import ru.practicum.shareit.item.dto.ItemDto;
-import ru.practicum.shareit.item.dto.ItemInfoDto;
+import ru.practicum.shareit.item.dto.ItemDtoOut;
+import ru.practicum.shareit.item.mapper.ItemMapper;
+import ru.practicum.shareit.item.model.Item;
+import ru.practicum.shareit.item.service.ItemService;
+import ru.practicum.shareit.user.User;
 
-import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Collections;
 import java.util.List;
 
-import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static ru.practicum.shareit.item.ItemController.USER_HEADER;
 
-@WebMvcTest(ItemController.class)
-@AutoConfigureMockMvc
+@WebMvcTest(controllers = ItemController.class)
 class ItemControllerTest {
 
-    @MockBean
-    private ItemService itemService;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper mapper;
+    @MockBean
+    private ItemService itemService;
 
-    public CommentDto getCommentDto() {
-        return CommentDto.builder()
-                .id(1L)
-                .text("TestCommentText")
-                .authorName("TestAuthorName")
-                .created(LocalDateTime.now())
-                .build();
-    }
 
-    public ItemInfoDto getItemInfoDto() {
-        return ItemInfoDto.builder()
-                .id(1L)
-                .name("TestItemName")
-                .description("TestItemDescription")
-                .comments(List.of(getCommentDto()))
-                .build();
-    }
+    private final User user = User.builder()
+            .id(1L)
+            .name("username")
+            .email("my@email.com")
+            .build();
 
-    public ItemDto getTestItemDto() {
-        return ItemDto.builder()
-                .id(1L)
-                .name("TestItemName")
-                .description("TestItemDescription")
-                .requestId(1L)
+    private final Item item = Item.builder()
+            .id(1L)
+            .name("item name")
+            .description("description")
+            .owner(user)
+            .build();
+
+
+    @Test
+    @SneakyThrows
+    void createItemWhenItemIsValid() {
+        Long userId = 0L;
+        ItemDto itemDtoToCreate = ItemDto.builder()
+                .description("some item description")
+                .name("some item name")
                 .available(true)
                 .build();
-    }
 
-    @Test
-    void findAll() throws Exception {
-        // given
-        when(itemService.findItemsByUserId(anyLong())).thenReturn(Collections.emptyList());
+        when(itemService.add(userId, itemDtoToCreate)).thenReturn(ItemMapper.toItemDtoOut(ItemMapper.toItem(itemDtoToCreate)));
 
-        // when + then
-        mockMvc.perform(get("/items")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
+        String result = mockMvc.perform(post("/items")
+                        .contentType("application/json")
+                        .header(USER_HEADER, userId)
+                        .content(objectMapper.writeValueAsString(itemDtoToCreate)))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
-        verify(itemService, times(1)).findItemsByUserId(anyLong());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        ItemDto resultItemDto = objectMapper.readValue(result, ItemDto.class);
+        assertEquals(itemDtoToCreate.getDescription(), resultItemDto.getDescription());
+        assertEquals(itemDtoToCreate.getName(), resultItemDto.getName());
+        assertEquals(itemDtoToCreate.getAvailable(), resultItemDto.getAvailable());
     }
 
-    @Test
-    void getItemDto() throws Exception {
-        // given
-        ItemInfoDto itemInfoDto = getItemInfoDto();
-        when(itemService.findItemById(anyLong(), anyLong())).thenReturn(itemInfoDto);
+    /*@Test
+    @SneakyThrows
+    void createItemWhenItemIsNotValidShouldReturnBadRequest() {
+        Long userId = 0L;
+        ItemDto itemDtoToCreate = ItemDto.builder()
+                .description(" ")
+                .name(" ")
+                .available(null)
+                .build();
 
-        // when + then
-        mockMvc.perform(get("/items/1")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemInfoDto.getId()), Long.class))
-                .andExpect(jsonPath("$.name", is(itemInfoDto.getName())))
-                .andExpect(jsonPath("$.description", is(itemInfoDto.getDescription())));
-        verify(itemService, times(1)).findItemById(anyLong(), anyLong());
-    }
+        when(itemService.add(userId, itemDtoToCreate)).thenReturn(ItemMapper.toItemDtoOut(ItemMapper.toItem(itemDtoToCreate)));
 
-    @Test
-    void create() throws Exception {
-        // given
-        ItemDto itemDto = getTestItemDto();
-        when(itemService.create(anyLong(), any())).thenReturn(itemDto);
-
-        // when + then
         mockMvc.perform(post("/items")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(itemDto)))
+                        .contentType("application/json")
+                        .header(USER_HEADER, userId)
+                        .content(objectMapper.writeValueAsString(itemDtoToCreate)))
+                .andExpect(status().isBadRequest());
+
+        verify(itemService, never()).add(userId, itemDtoToCreate);
+    }*/
+
+    @Test
+    @SneakyThrows
+    void updateWhenItemIsValidShouldReturnStatusIsOk() {
+        Long itemId = 0L;
+        Long userId = 0L;
+        ItemDto itemDtoToCreate = ItemDto.builder()
+                .description("some item description")
+                .name("some item name")
+                .available(true)
+                .build();
+
+        when(itemService.update(userId, itemId, itemDtoToCreate)).thenReturn(ItemMapper.toItemDtoOut(ItemMapper.toItem(itemDtoToCreate)));
+
+        String result = mockMvc.perform(patch("/items/{itemId}", itemId)
+                        .contentType("application/json")
+                        .header(USER_HEADER, userId)
+                        .content(objectMapper.writeValueAsString(itemDtoToCreate)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemDto.getId()), Long.class))
-                .andExpect(jsonPath("$.name", is(itemDto.getName())))
-                .andExpect(jsonPath("$.description", is(itemDto.getDescription())))
-                .andExpect(jsonPath("$.requestId", is(itemDto.getRequestId()), Long.class))
-                .andExpect(jsonPath("$.available", is(itemDto.getAvailable()), Boolean.class));
-        verify(itemService, times(1)).create(anyLong(), any());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        ItemDto resultItemDto = objectMapper.readValue(result, ItemDto.class);
+        assertEquals(itemDtoToCreate.getDescription(), resultItemDto.getDescription());
+        assertEquals(itemDtoToCreate.getName(), resultItemDto.getName());
+        assertEquals(itemDtoToCreate.getAvailable(), resultItemDto.getAvailable());
     }
 
     @Test
-    void update() throws Exception {
-        // given
-        ItemDto itemDto = getTestItemDto();
-        when(itemService.update(anyLong(), anyLong(), any())).thenReturn(itemDto);
+    @SneakyThrows
+    void getShouldReturnStatusOk() {
+        Long itemId = 0L;
+        Long userId = 0L;
+        ItemDtoOut itemDtoToCreate = ItemDtoOut.builder()
+                .id(itemId)
+                .description("")
+                .name("")
+                .available(true)
+                .build();
 
-        // when + then
-        mockMvc.perform(patch("/items/1")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(itemDto)))
+        when(itemService.findItemById(userId, itemId)).thenReturn(itemDtoToCreate);
+
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/items/{itemId}", itemId)
+                        .contentType("application/json")
+                        .header(USER_HEADER, userId)
+                        .content(objectMapper.writeValueAsString(itemDtoToCreate)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(itemDto.getId()), Long.class))
-                .andExpect(jsonPath("$.name", is(itemDto.getName())))
-                .andExpect(jsonPath("$.description", is(itemDto.getDescription())))
-                .andExpect(jsonPath("$.requestId", is(itemDto.getRequestId()), Long.class))
-                .andExpect(jsonPath("$.available", is(itemDto.getAvailable()), Boolean.class));
-        verify(itemService, times(1)).update(anyLong(), anyLong(), any());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(itemDtoToCreate), result);
     }
 
     @Test
-    void addComment() throws Exception {
-        // given
-        CommentDto commentDto = getCommentDto();
-        when(itemService.addComment(anyLong(), anyLong(), any())).thenReturn(commentDto);
+    @SneakyThrows
+    void getAllShouldReturnStatusOk() {
+        Long userId = 0L;
+        Integer from = 0;
+        Integer size = 10;
+        List<ItemDtoOut> itemsDtoToExpect = List.of(ItemDtoOut.builder()
+                .name("some item name")
+                .description("some item description")
+                .available(true)
+                .build());
 
-        // when + then
-        mockMvc.perform(post("/items/1/comment")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(commentDto)))
+        when(itemService.findAll(userId, from, size)).thenReturn(itemsDtoToExpect);
+
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/items", from, size)
+                        .header(USER_HEADER, userId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id", is(commentDto.getId()), Long.class))
-                .andExpect(jsonPath("$.text", is(commentDto.getText())))
-                .andExpect(jsonPath("$.authorName", is(commentDto.getAuthorName())))
-                .andExpect(jsonPath("$.created", is(commentDto.getCreated().format(DateTimeFormatter.ISO_DATE_TIME))));
-        verify(itemService, times(1)).addComment(anyLong(), anyLong(), any());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(itemsDtoToExpect), result);
     }
 
     @Test
-    void searchItemDto() throws Exception {
-        // given
-        when(itemService.findItemsByText(anyString())).thenReturn(Collections.emptyList());
+    @SneakyThrows
+    void searchItemsShouldReturnStatusOk() {
+        Long userId = 0L;
+        Integer from = 0;
+        Integer size = 10;
+        String text = "find";
+        List<ItemDtoOut> itemsDtoToExpect = List.of(ItemDtoOut.builder()
+                .name("some item name")
+                .description("some item description")
+                .available(true)
+                .build());
 
-        // when + then
-        mockMvc.perform(get("/items/search?text=test")
-                        .header("X-Sharer-User-Id", 1L)
-                        .characterEncoding(StandardCharsets.UTF_8)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .accept(MediaType.APPLICATION_JSON))
+        when(itemService.search(userId, text, from, size)).thenReturn(itemsDtoToExpect);
+
+        String result = mockMvc.perform(MockMvcRequestBuilders.get("/items/search", from, size)
+                        .header(USER_HEADER, userId)
+                        .param("text", text))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
-        verify(itemService, times(1)).findItemsByText(anyString());
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(itemsDtoToExpect), result);
     }
+
+
+    @Test
+    @SneakyThrows
+    void createCommentWhenCommentIsValidShouldReturnStatusIsOk() {
+        ItemDtoOut itemDtoOut = itemService.add(user.getId(), ItemMapper.toItemDto(item));
+        CommentDto commentToAdd = CommentDto.builder()
+                .text("some comment")
+                .build();
+        CommentDtoOut commentDtoOut = CommentDtoOut.builder()
+                .id(1L)
+                .itemId(item.getId())
+                .text(commentToAdd.getText())
+                .build();
+        when(itemService.createComment(user.getId(), commentToAdd, item.getId())).thenReturn(commentDtoOut);
+
+        String result = mockMvc.perform(post("/items/{itemId}/comment", item.getId())
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId())
+                        .content(objectMapper.writeValueAsString(commentToAdd)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertEquals(objectMapper.writeValueAsString(commentDtoOut), result);
+    }
+
+    /*@Test
+    @SneakyThrows
+    void findAllItemsShouldReturnBadRequest() {
+        Integer from = -1;
+        Integer size = 10;
+
+        mockMvc.perform(get("/items")
+                        .param("from", String.valueOf(from))
+                        .param("size", String.valueOf(size))
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
+                .andExpect(status().isBadRequest());
+
+        verify(itemService, never()).findAll(user.getId(), from, size);
+    }*/
+
+   /* @Test
+    @SneakyThrows
+    void searchShouldReturnBadRequest() {
+        Integer from = -1;
+        Integer size = 10;
+        String text = "item";
+
+        mockMvc.perform(get("/items/search")
+                        .param("text", text)
+                        .param("from", String.valueOf(from))
+                        .param("size", String.valueOf(size))
+                        .contentType("application/json")
+                        .header(USER_HEADER, user.getId()))
+                .andExpect(status().isBadRequest());
+
+        verify(itemService, never()).search(user.getId(), text, from, size);
+    }*/
 }

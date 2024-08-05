@@ -1,31 +1,40 @@
 package ru.practicum.shareit.booking;
 
-import ru.practicum.shareit.booking.dto.BookingDateInfoDto;
+import lombok.experimental.UtilityClass;
 import ru.practicum.shareit.booking.dto.BookingDto;
+import ru.practicum.shareit.booking.dto.BookingDtoOut;
+import ru.practicum.shareit.booking.dto.BookingItemDto;
 import ru.practicum.shareit.booking.model.Booking;
-import ru.practicum.shareit.item.ItemMapper;
+import ru.practicum.shareit.booking.model.BookingStatus;
+import ru.practicum.shareit.item.mapper.ItemMapper;
+import ru.practicum.shareit.item.model.Item;
+import ru.practicum.shareit.user.User;
 import ru.practicum.shareit.user.UserMapper;
 
+@UtilityClass
 public class BookingMapper {
-    public static BookingDto toBookingDto(Booking booking) {
-        if (booking == null) return null;
-        return BookingDto.builder()
-                .id(booking.getId())
-                .start(booking.getStart())
-                .end(booking.getEnd())
-                .item(ItemMapper.toItemDto(booking.getItem()))
-                .booker(UserMapper.toUserDto(booking.getBooker()))
-                .status(booking.getStatus().name())
-                .build();
+    public Booking toBooking(User user, Item item, BookingDto bookingDto) {
+        return new Booking(
+                item,
+                bookingDto.getStart(),
+                bookingDto.getEnd(),
+                user,
+                BookingStatus.WAITING);
     }
 
-    public static BookingDateInfoDto toBookingDateInfoDto(Booking booking) {
-        if (booking == null) return null;
-        return BookingDateInfoDto.builder()
-                .id(booking.getId())
-                .start(booking.getStart())
-                .end(booking.getEnd())
-                .bookerId(booking.getBooker().getId())
-                .build();
+    public BookingDtoOut toBookingOut(Booking booking) {
+        return new BookingDtoOut(
+                booking.getId(),
+                ItemMapper.toItemDtoOut(booking.getItem()),
+                booking.getStart(),
+                booking.getEnd(),
+                UserMapper.toUserDto(booking.getBooker()),
+                booking.getStatus());
+    }
+
+    public static BookingItemDto toBookingItemDto(Booking booking) {
+        return new BookingItemDto(
+                booking.getId(),
+                booking.getBooker().getId());
     }
 }
